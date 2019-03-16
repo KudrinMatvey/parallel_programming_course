@@ -1,3 +1,7 @@
 message(STATUS "Task 2")
 
-add_subdirectory(gladyshev_a_gauss_block_omp)
+SUBDIRLIST(subdirs ${CMAKE_CURRENT_SOURCE_DIR})
+
+foreach(subd ${subdirs})
+  add_subdirectory(${subd})
+endforeach()
