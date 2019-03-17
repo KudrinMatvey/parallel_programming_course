@@ -2,6 +2,8 @@
 #include <math.h>
 #include <stdio.h>
 #include <time.h>
+#include <utility>
+#include <string>
 #include <iostream>
 #include <vector>
 
