@@ -1,18 +1,19 @@
 // Copyright 2019 Kudrin Matvey
 #include <math.h>
 #include <stdio.h>
+#include <time.h>
 #include <iostream>
 #include <vector>
 
 
 using std::vector;
 
-void compex(int &a, int &b) {
+void compex(int *a, int *b) {
     if (a > b) std::swap(a, b);
 }
 
-void oddeven_merge_sort(std::vector<int>& arr) {
-    const int length = arr.size();
+void oddeven_merge_sort(std::vector<int> *arr) {
+    const int length = arr->size();
     int t = static_cast<int>(ceil(log2(length)));
     int p = static_cast<int>(pow(2, t - 1));
 
@@ -24,7 +25,9 @@ void oddeven_merge_sort(std::vector<int>& arr) {
         while (d > 0) {
             for (int i = 0; i < length - d; ++i) {
                 if ((i & p) == r) {
-                    compex(arr[i], arr[i + d]);
+                    if (arr->at(i) > arr->at(i + d)) {
+                        std::iter_swap(arr->begin() + i, arr->begin() + i + d);
+                    }
                 }
             }
 
@@ -47,24 +50,22 @@ bool cmdOptionExists(char** begin, char** end, const std::string& option) {
     return std::find(begin, end, option) != end;
 }
 
-int myRand() {
-    static int next = 3251;
-    next = ((next * next) / 100) % 10000;
-    return next;
-}
-
-vector<int> generateRandomArray(const int en, const int min, const int max) {
-    vector<int> arr(en);
+vector<int>* generateRandomArray(const int en, int min, int max) {
+    if (min >= max) {
+        max = min + max;
+    }
+    vector<int> *arr = new vector<int>(en);
+    srand(static_cast<unsigned int>(time(NULL)));
     for (int j = 0; j < en; j++)
-        arr[j] = myRand() % (max - min);
+        arr->at(j) = min + (std::rand() % (max - min));
     return arr;
 }
 
-bool check(vector<int>& arr, int elementsNumber) {
+bool check(vector<int> *arr, int elementsNumber) {
     bool flag = true;
-    int min = arr[0];
+    int min = arr->at(0);
     for (int i = 1; i < elementsNumber; i++) {
-        if (arr[i] < min) {
+        if (arr->at(i) < min) {
             flag = false;
         }
     }
@@ -82,21 +83,22 @@ int calculateStep(int iter) {
     return step;
 }
 
-void batcher(vector<int>& a, const int step) {
-    vector<int> tmp((a.size() / step) + 2);
+void batcher(vector<int> *a, const int step) {
+    vector<int> *tmp = new vector<int>;
     for (int start = 0; start < step; start++) {
-        for (unsigned int i = start, j = 0; i < a.size(); i += step, j++) {
-            tmp[j] = a[i];
+        for (unsigned int i = start, j = 0; i < a->size(); i += step, j++) {
+            tmp->push_back(a->at(i));
         }
         oddeven_merge_sort(tmp);
         unsigned int i = start, j = 0;
-        for (; i < a.size() - start; i += step, j++) {
-            a[i] = tmp[j];
+        for (; i < a->size() - start; i += step, j++) {
+            a->at(i) = tmp->at(j);
         }
+        tmp->clear();
     }
 }
 
-void shellSort(vector<int>& a, int size) {
+void shellSort(vector<int> *a, int size) {
     int step = 0;
     int iter = 0;
     while (calculateStep(iter++) < size / 3) {
@@ -112,7 +114,7 @@ int main(int argc, char *argv[]) {
     int elementsNumber = 1000;
     int a = 0;
     int b = 10000;
-    vector<int> arr;
+    vector<int> *arr;
 
     if (cmdOptionExists(argv, argv + argc, "-n")) {
         char *wcount = getCmdOption(argv, argv + argc, "-n");
@@ -133,7 +135,7 @@ int main(int argc, char *argv[]) {
     shellSort(arr, elementsNumber);
 
     for (int i = 0; i < elementsNumber; i++) {
-        printf("%d ", arr[i]);
+        printf("%d ", arr->at(i));
     }
     if (check(arr, elementsNumber)) {
         printf("\nOK: array is sorted");
