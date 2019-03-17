@@ -6,7 +6,7 @@
 #include <string>
 #include <iostream>
 #include <vector>
-
+#include <algorithm>
 
 using std::vector;
 
