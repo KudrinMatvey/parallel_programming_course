@@ -146,9 +146,9 @@ int main(int argc, char *argv[]) {
     }  // end of parallel section
     // std::cout << "Elapsed time: " << << " s\n";
 
-    // for (int i = 0; i < elementsNumber; i++) {
-    //    printf("%d ", arr->at(i));
-    // }
+    for (int i = 0; i < elementsNumber; i++) {
+        printf("%d ", arr->at(i));
+    }
     if (check(arr, elementsNumber)) {
         printf("\nOK: array is sorted");
     } else {
