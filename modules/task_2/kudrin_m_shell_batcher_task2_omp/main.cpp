@@ -18,7 +18,7 @@ void compex(int *a, int *b) {
 
 void oddeven_merge_sort(std::vector<int> *arr) {
     const int length = arr->size();
-    int t = static_cast<int>(ceil(log2(length)));
+    int t = static_cast<int>(ceil(log2(length))); 
     int p = static_cast<int>(pow(2, t - 1));
 
     while (p > 0) {
@@ -26,9 +26,8 @@ void oddeven_merge_sort(std::vector<int> *arr) {
         int r = 0;
         int d = p;
         int i;
-        // shared(arr,t,q,length,p,r,d,i)
         while (d > 0) {
-#pragma omp for
+        #pragma omp for
             for (i = 0; i < length - d; ++i) {
                 if ((i & p) == r) {
                 if (arr->at(i) > arr->at(i + d)) {
@@ -36,13 +35,12 @@ void oddeven_merge_sort(std::vector<int> *arr) {
                     }
                 }
             }
-
-        d = q - p;
-        q /= 2;
-        r = p;
+            d = q - p;
+            q /= 2;
+            r = p;
         }
-        p /= 2;
-        }
+    p /= 2;
+    }
 }
 
 char* getCmdOption(char **begin, char **end, const std::string& option) {
