@@ -81,8 +81,7 @@ int calculateStep(int iter) {
     if (iter % 2) {
         step = static_cast<int>(8 * pow(2, iter)
             - 6 * pow(2, (iter + 1) / 2) + 1);
-    }
-    else {
+    } else {
         step = static_cast<int>(9 * pow(2, iter) - 9 * pow(2, iter / 2) + 1);
     }
     return step;
@@ -149,13 +148,12 @@ int main(int argc, char *argv[]) {
     }  // end of parallel section
     std::cout << "Elapsed time: " << << " s\n";
 
-    for (int i = 0; i < elementsNumber; i++) {
-        printf("%d ", arr->at(i));
-    }
+    // for (int i = 0; i < elementsNumber; i++) {
+    //    printf("%d ", arr->at(i));
+    // }
     if (check(arr, elementsNumber)) {
         printf("\nOK: array is sorted");
-    }
-    else {
+    } else {
         printf("\n ERROR: array is not sorted");
     }
     return 0;
