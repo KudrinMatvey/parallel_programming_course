@@ -90,11 +90,9 @@ int calculateStep(int iter) {
 void batcher(vector<int> *a, const int step) {
     vector<int> *tmp = new vector<int>;
     int start;
-    int tid;
     {
 #pragma omp for
         for (start = 0; start < step; start++) {
-            tid = omp_get_thread_num();
             for (unsigned int i = start, j = 0; i < a->size(); i += step, j++) {
                 tmp->push_back(a->at(i));
             }
@@ -146,7 +144,7 @@ int main(int argc, char *argv[]) {
     {
         shellSort(arr, elementsNumber);
     }  // end of parallel section
-    std::cout << "Elapsed time: " << << " s\n";
+    // std::cout << "Elapsed time: " << << " s\n";
 
     // for (int i = 0; i < elementsNumber; i++) {
     //    printf("%d ", arr->at(i));
