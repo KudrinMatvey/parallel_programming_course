@@ -8,7 +8,6 @@
 #include <iostream>
 #include <vector>
 #include <algorithm>
-#include <chrono>
 
 using std::vector;
 
@@ -18,7 +17,7 @@ void compex(int *a, int *b) {
 
 void oddeven_merge_sort(std::vector<int> *arr) {
     const int length = arr->size();
-    int t = static_cast<int>(ceil(log2(length))); 
+    int t = static_cast<int>(ceil(log2(length)));
     int p = static_cast<int>(pow(2, t - 1));
 
     while (p > 0) {
@@ -27,19 +26,20 @@ void oddeven_merge_sort(std::vector<int> *arr) {
         int d = p;
         int i;
         while (d > 0) {
-        #pragma omp for
+#pragma omp for
             for (i = 0; i < length - d; ++i) {
                 if ((i & p) == r) {
-                if (arr->at(i) > arr->at(i + d)) {
-                    std::iter_swap(arr->begin() + i, arr->begin() + i + d);
+                    if (arr->at(i) > arr->at(i + d)) {
+                        std::iter_swap(arr->begin() + i, arr->begin() + i + d);
                     }
                 }
             }
             d = q - p;
             q /= 2;
             r = p;
+#pragma omp barrier
         }
-    p /= 2;
+        p /= 2;
     }
 }
 
@@ -80,8 +80,9 @@ int calculateStep(int iter) {
     int step = 0;
     if (iter % 2) {
         step = static_cast<int>(8 * pow(2, iter)
-        - 6 * pow(2, (iter + 1) / 2) + 1);
-    } else {
+            - 6 * pow(2, (iter + 1) / 2) + 1);
+    }
+    else {
         step = static_cast<int>(9 * pow(2, iter) - 9 * pow(2, iter / 2) + 1);
     }
     return step;
@@ -92,10 +93,9 @@ void batcher(vector<int> *a, const int step) {
     int start;
     int tid;
     {
-        #pragma omp for
+#pragma omp for
         for (start = 0; start < step; start++) {
             tid = omp_get_thread_num();
-// printf("thread = %d is sorting from %d to %d\n", tid, start , start + step);
             for (unsigned int i = start, j = 0; i < a->size(); i += step, j++) {
                 tmp->push_back(a->at(i));
             }
@@ -117,16 +117,12 @@ void shellSort(vector<int> *a, int size) {
     }
     while (--iter >= 0) {
         step = calculateStep(iter);
-//        auto start = std::chrono::high_resolution_clock::now();
         batcher(a, step);
-//        auto finish = std::chrono::high_resolution_clock::now();
-//        std::chrono::duration<double> elapsed = finish - start;
-//        std::cout << "Elapsed time: " << elapsed.count() << " s\n";
     }
 }
 
 int main(int argc, char *argv[]) {
-    int elementsNumber = 1000;
+    int elementsNumber = 29;
     int a = 0;
     int b = 10000;
     vector<int> *arr;
@@ -147,22 +143,20 @@ int main(int argc, char *argv[]) {
     }
 
     arr = generateRandomArray(elementsNumber, a, b);
-        auto start = std::chrono::high_resolution_clock::now();
-    #pragma omp parallel shared(arr)
+#pragma omp parallel shared(arr)
     {
         shellSort(arr, elementsNumber);
     }  // end of parallel section
-        auto finish = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double> elapsed = finish - start;
-        std::cout << "Elapsed time: " << elapsed.count() << " s\n";
+    std::cout << "Elapsed time: " << << " s\n";
 
-        for (int i = 0; i < elementsNumber; i++) {
-            printf("%d ", arr->at(i));
-        }
-        if (check(arr, elementsNumber)) {
-            printf("\nOK: array is sorted");
-        } else {
-            printf("\n ERROR: array is not sorted");
-        }
+    for (int i = 0; i < elementsNumber; i++) {
+        printf("%d ", arr->at(i));
+    }
+    if (check(arr, elementsNumber)) {
+        printf("\nOK: array is sorted");
+    }
+    else {
+        printf("\n ERROR: array is not sorted");
+    }
     return 0;
 }
