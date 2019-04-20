@@ -37,7 +37,6 @@ void oddeven_merge_sort(std::vector<int> *arr) {
             d = q - p;
             q /= 2;
             r = p;
-#pragma omp barrier
         }
         p /= 2;
     }
