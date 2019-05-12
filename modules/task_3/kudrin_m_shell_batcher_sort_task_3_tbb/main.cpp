@@ -98,7 +98,7 @@ void oddEvenMergeSortOmp(std::vector<int> *arr) {
         int r = 0;
         int d = p;
         while (d > 0) {
-#pragma omp parallel for shared(length, d, p, r) if (length - d > 5000)
+#pragma omp parallel for shared(d, p, r) if (length - d > 5000)
             for (int i = 1; i < length - d - 1; i++) {
                 if ((i & p) == r) {
                     if (arr->at(i) > arr->at(i + d)) {
@@ -205,7 +205,7 @@ int calculateStep(int iter) {
 
 void batcher(vector<int> *a, const int step) {
     if (a->size() / step > 4) {
-#pragma omp parallel shared(a, step)
+#pragma omp parallel shared(a)
         {
             int start;
             vector<int> *tmp = new vector<int>;
