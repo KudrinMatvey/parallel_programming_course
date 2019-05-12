@@ -21,22 +21,72 @@ using tbb::concurrent_vector;
 class OddEvenSorter {
     concurrent_vector<int> *arr;
     const int p, r, d;
-public: OddEvenSorter( concurrent_vector<int> *arr, const int p, const int r, const int  d) : arr(arr), p(p), r(r), d(d)  {}
-    void operator()( const blocked_range<int>& range ) const {
-        int begin=range.begin(),  end=range.end();
-        for( int i = begin; i != end; i++ )  {
+
+ public:
+    OddEvenSorter(concurrent_vector<int> *arr, const int p, const int r,
+            const int  d) : arr(arr), p(p), r(r), d(d) {}
+    void operator()(const blocked_range<int>& range) const {
+        int begin = range.begin(),  end = range.end();
+        for (int i = begin; i != end; i++) {
             if ((p & i) == r) {
                 if (arr->at(i) > arr->at(i + d)) {
-                    std::iter_swap(arr->begin() + i, arr->begin() + i + d);
+                    int tmp = arr->at(i);
+                    arr->at(i) = arr->at(i + d);
+                    arr->at(i + d) = tmp;
                 }
             }
         }
     }
 };
 
-void compex(int *a, int *b) {
-    if (a > b) std::swap(a, b);
-}
+class BatcherSorter {
+    concurrent_vector<int> *a;
+    int step;
+
+ public:
+    BatcherSorter(concurrent_vector<int> *a, const int step) : a(a),
+    step(step) {}
+    void operator()(const blocked_range<int>& range) const {
+        int begin = range.begin(),  end = range.end();
+        vector<int> *tmp = new vector<int>(a->size() / step);
+        for (int start = begin; start != end; start++) {
+            for (unsigned int i = start, j = 0; i < a->size(); i += step, j++) {
+                tmp->push_back(a->at(i));
+            }
+            const int length = tmp->size();
+            int t = static_cast<int>(ceil(log2(length)));
+            int p = static_cast<int>(pow(2, t - 1));
+            while (p > 0) {
+                int q = static_cast<int>(pow(2, t - 1));
+                int r = 0;
+                int d = p;
+                int i;
+                while (d > 0) {
+                    for (i = 0; i < length - d; ++i) {
+                        if ((i & p) == r) {
+                            if (tmp->at(i) > tmp->at(i + d)) {
+                                std::iter_swap(tmp->begin() + i,
+                                        tmp->begin() + i + d);
+                            }
+                        }
+                    }
+                    d = q - p;
+                    q /= 2;
+                    r = p;
+                }
+                p /= 2;
+            }
+
+            unsigned int i = start, j = 0;
+            for (; i < a->size() - start; i += step, j++) {
+                a->at(i) = tmp->at(j);
+            }
+            tmp->clear();
+        }
+        delete tmp;
+    }
+};
+
 
 void oddEvenMergeSortOmp(std::vector<int> *arr) {
     const int length = arr->size();
@@ -49,7 +99,6 @@ void oddEvenMergeSortOmp(std::vector<int> *arr) {
         int d = p;
         double start = 0;
         while (d > 0) {
-            //start = omp_get_wtime();
 #pragma omp parallel for shared(length, d, p, r) if (length - d > 5000)
             for (int i = 1; i < length - d - 1; i++) {
                 if ((i & p) == r) {
@@ -58,7 +107,6 @@ void oddEvenMergeSortOmp(std::vector<int> *arr) {
                     }
                 }
             }
-            //timep += omp_get_wtime() - start;
             d = q - p;
             q /= 2;
             r = p;
@@ -71,14 +119,12 @@ void oddEvenMergeSortLinear(std::vector<int> *arr) {
     const int length = arr->size();
     int t = static_cast<int>(ceil(log2(length)));
     int p = static_cast<int>(pow(2, t - 1));
-    //double start;
     while (p > 0) {
         int q = static_cast<int>(pow(2, t - 1));
         int r = 0;
         int d = p;
         int i;
         while (d > 0) {
-            //start = omp_get_wtime();
             for (i = 0; i < length - d; ++i) {
                 if ((i & p) == r) {
                     if (arr->at(i) > arr->at(i + d)) {
@@ -86,7 +132,6 @@ void oddEvenMergeSortLinear(std::vector<int> *arr) {
                     }
                 }
             }
-            //timel += omp_get_wtime() - start;
             d = q - p;
             q /= 2;
             r = p;
@@ -104,8 +149,8 @@ void oddEvenMergeSortTbb(concurrent_vector<int> *arr) {
         int r = 0;
         int d = p;
         while (d > 0) {
-
-            parallel_for(blocked_range<int>(1, length - d - 1, 500), OddEvenSorter(arr,p,r,d));
+            parallel_for(blocked_range<int>(1, length - d - 1, 40000),
+                    OddEvenSorter(arr, p, r, d));
             d = q - p;
             q /= 2;
             r = p;
@@ -114,53 +159,6 @@ void oddEvenMergeSortTbb(concurrent_vector<int> *arr) {
     }
 }
 
-class BatcherSorter {
-    concurrent_vector<int> *a;
-    int step;
-public: BatcherSorter( concurrent_vector<int> *a, const int step) : a(a), step(step)  {}
-    void operator()( const blocked_range<int>& range ) const {
-        int begin=range.begin(),  end=range.end();
-        vector<int> *tmp = new vector<int>(a->size() / step);
-        for (int start = begin; start != end; start++) {
-            for (unsigned int i = start, j = 0; i < a->size(); i += step, j++) {
-                tmp->push_back(a->at(i));
-            }
-            const int length = tmp->size();
-            int t = static_cast<int>(ceil(log2(length)));
-            int p = static_cast<int>(pow(2, t - 1));
-            //double start;
-            while (p > 0) {
-                int q = static_cast<int>(pow(2, t - 1));
-                int r = 0;
-                int d = p;
-                int i;
-                while (d > 0) {
-                    //start = omp_get_wtime();
-                    for (i = 0; i < length - d; ++i) {
-                        if ((i & p) == r) {
-                            if (tmp->at(i) > tmp->at(i + d)) {
-                                std::iter_swap(tmp->begin() + i, tmp->begin() + i + d);
-                            }
-                        }
-                    }
-                    //timel += omp_get_wtime() - start;
-                    d = q - p;
-                    q /= 2;
-                    r = p;
-                }
-                p /= 2;
-            }
-
-            unsigned int i = start, j = 0;
-            for (; i < a->size() - start; i += step, j++) {
-                a->at(i) = tmp->at(j);
-            }
-            tmp->clear();
-        }
-        delete tmp;
-    }
-
-};
 
 char* getCmdOption(char **begin, char **end, const std::string& option) {
     char **itr = std::find(begin, end, option);
@@ -184,7 +182,7 @@ vector<int>* generateRandomArray(const int en, int min, int max) {
     return arr;
 }
 
-bool check(vector<int> *arr, int elementsNumber) {
+bool check(concurrent_vector<int> *arr, int elementsNumber) {
     bool flag = true;
     int min = arr->at(0);
     for (int i = 1; i < elementsNumber; i++) {
@@ -200,8 +198,7 @@ int calculateStep(int iter) {
     if (iter % 2) {
         step = static_cast<int>(8 * pow(2, iter)
                                 - 6 * pow(2, (iter + 1) / 2) + 1);
-    }
-    else {
+    } else {
         step = static_cast<int>(9 * pow(2, iter) - 9 * pow(2, iter / 2) + 1);
     }
     return step;
@@ -209,17 +206,18 @@ int calculateStep(int iter) {
 
 void batcher(vector<int> *a, const int step) {
     if (a->size() / step > 4) {
-#pragma omp parallel shared (a, step)
+#pragma omp parallel shared(a, step)
         {
             int start;
             vector<int> *tmp = new vector<int>;
 #pragma omp for
             for (start = 0; start < step; start++) {
-                for (unsigned int i = start, j = 0; i < a->size(); i += step, j++) {
+                unsigned int i = start, j = 0;
+                for (; i < a->size(); i += step, j++) {
                     tmp->push_back(a->at(i));
                 }
                 oddEvenMergeSortLinear(tmp);
-                unsigned int i = start, j = 0;
+                i = start, j = 0;
                 for (; i < a->size() - start; i += step, j++) {
                     a->at(i) = tmp->at(j);
                 }
@@ -288,7 +286,7 @@ void shellSort(vector<int> *a, int size, int mode) {
     }
     while (--iter >= 0) {
         step = calculateStep(iter);
-        switch (mode){
+        switch (mode) {
             case 0 : batcherLinear(a, step);
                 break;
             case 1 : batcher(a, step);
@@ -308,7 +306,8 @@ void shellSortTbb(concurrent_vector<int> *a, int size) {
         if (step < 10) {
             batcherTbb(a, step);
         } else {
-            parallel_for(blocked_range<int>(0, step, 100), BatcherSorter(a, step));
+            parallel_for(blocked_range<int>(0, step, 100),
+                    BatcherSorter(a, step));
         }
     }
 }
@@ -316,7 +315,7 @@ void shellSortTbb(concurrent_vector<int> *a, int size) {
 
 
 int main(int argc, char *argv[]) {
-    int elementsNumber = 40000000;
+    int elementsNumber = 1000000;
     int a = 0;
     int b = 10000000;
     double start_omp, end_omp, start_linear, end_linear, start_tbb, end_tbb;
@@ -354,23 +353,24 @@ int main(int argc, char *argv[]) {
     end_linear = omp_get_wtime();
 
     start_omp = omp_get_wtime();
-//    shellSort(arr, elementsNumber, 1);
+    shellSort(arr, elementsNumber, 1);
     end_omp = omp_get_wtime();
 
 
-    tbb::task_scheduler_init init;
+    tbb::task_scheduler_init init();
     start_tbb = omp_get_wtime();
     shellSortTbb(arr_tbb, elementsNumber);
     end_tbb = omp_get_wtime();
 
     fflush(stdout);
 
-//    if (check(arr_tbb, elementsNumber)) {
-        printf("\nOK: array is lineary sorted in %f omp %f tbb %f omp/tbb %f", end_linear - start_linear, end_omp - start_omp, end_tbb - start_tbb, (end_omp - start_omp)/ (end_tbb - start_tbb));
-//    }
-//    else {
-//        printf("\n ERROR: array is not sorted");
-//    }
+    if (check(arr_tbb, elementsNumber)) {
+        printf("\nOK: array is lineary sorted in %f omp %f tbb %f omp/tbb %f",
+                end_linear - start_linear, end_omp - start_omp, end_tbb
+                - start_tbb, (end_omp - start_omp)/ (end_tbb - start_tbb));
+    } else {
+        printf("\n ERROR: array is not sorted");
+    }
     delete arr, arr_linear, arr_tbb;
     return 0;
 }
