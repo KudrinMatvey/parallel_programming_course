@@ -97,7 +97,6 @@ void oddEvenMergeSortOmp(std::vector<int> *arr) {
         int q = static_cast<int>(pow(2, t - 1));
         int r = 0;
         int d = p;
-        double start = 0;
         while (d > 0) {
 #pragma omp parallel for shared(length, d, p, r) if (length - d > 5000)
             for (int i = 1; i < length - d - 1; i++) {
@@ -357,7 +356,7 @@ int main(int argc, char *argv[]) {
     end_omp = omp_get_wtime();
 
 
-    tbb::task_scheduler_init init();
+    tbb::task_scheduler_init init;
     start_tbb = omp_get_wtime();
     shellSortTbb(arr_tbb, elementsNumber);
     end_tbb = omp_get_wtime();
@@ -371,6 +370,8 @@ int main(int argc, char *argv[]) {
     } else {
         printf("\n ERROR: array is not sorted");
     }
-    delete arr, arr_linear, arr_tbb;
+    arr->clear();
+    arr_linear->clear();
+    arr_tbb->clear();
     return 0;
 }
