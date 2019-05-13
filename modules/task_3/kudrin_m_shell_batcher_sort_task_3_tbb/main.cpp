@@ -1,7 +1,6 @@
 // Copyright 2019 Kudrin Matvey
 
 #include <tbb/tbb.h>
-#include <omp.h>
 #include <math.h>
 #include <stdio.h>
 #include <time.h>
@@ -87,33 +86,6 @@ class BatcherSorter {
     }
 };
 
-
-void oddEvenMergeSortOmp(std::vector<int> *arr) {
-    const int length = arr->size();
-    int t = static_cast<int>(ceil(log2(length)));
-    int p = static_cast<int>(pow(2, t - 1));
-
-    while (p > 0) {
-        int q = static_cast<int>(pow(2, t - 1));
-        int r = 0;
-        int d = p;
-        while (d > 0) {
-#pragma omp parallel for shared(d, p, r) if (length - d > 5000)
-            for (int i = 1; i < length - d - 1; i++) {
-                if ((i & p) == r) {
-                    if (arr->at(i) > arr->at(i + d)) {
-                        std::iter_swap(arr->begin() + i, arr->begin() + i + d);
-                    }
-                }
-            }
-            d = q - p;
-            q /= 2;
-            r = p;
-        }
-        p /= 2;
-    }
-}
-
 void oddEvenMergeSortLinear(std::vector<int> *arr) {
     const int length = arr->size();
     int t = static_cast<int>(ceil(log2(length)));
@@ -157,7 +129,6 @@ void oddEvenMergeSortTbb(concurrent_vector<int> *arr) {
         p /= 2;
     }
 }
-
 
 char* getCmdOption(char **begin, char **end, const std::string& option) {
     char **itr = std::find(begin, end, option);
@@ -203,45 +174,6 @@ int calculateStep(int iter) {
     return step;
 }
 
-void batcher(vector<int> *a, const int step) {
-    if (a->size() / step > 4) {
-#pragma omp parallel shared(a)
-        {
-            int start;
-            vector<int> *tmp = new vector<int>;
-#pragma omp for
-            for (start = 0; start < step; start++) {
-                unsigned int i = start, j = 0;
-                for (; i < a->size(); i += step, j++) {
-                    tmp->push_back(a->at(i));
-                }
-                oddEvenMergeSortLinear(tmp);
-                i = start, j = 0;
-                for (; i < a->size() - start; i += step, j++) {
-                    a->at(i) = tmp->at(j);
-                }
-                tmp->clear();
-            }
-        delete tmp;
-        }
-    } else {
-        int start;
-        vector<int> *tmp = new vector<int>;
-        for (start = 0; start < step; start++) {
-            for (unsigned int i = start, j = 0; i < a->size(); i += step, j++) {
-                tmp->push_back(a->at(i));
-            }
-            oddEvenMergeSortOmp(tmp);
-            unsigned int i = start, j = 0;
-            for (; i < a->size() - start; i += step, j++) {
-                a->at(i) = tmp->at(j);
-            }
-            tmp->clear();
-        }
-        delete tmp;
-    }
-}
-
 void batcherLinear(vector<int> *a, const int step) {
     vector<int> *tmp = new vector<int>;
     int start;
@@ -277,7 +209,7 @@ void batcherTbb(concurrent_vector<int> *a, const int step) {
 }
 
 
-void shellSort(vector<int> *a, int size, int mode) {
+void shellSortLinear(vector<int> *a, int size) {
     int step = 0;
     int iter = 0;
     while (calculateStep(iter++) < size / 3) {
@@ -285,12 +217,7 @@ void shellSort(vector<int> *a, int size, int mode) {
     }
     while (--iter >= 0) {
         step = calculateStep(iter);
-        switch (mode) {
-            case 0 : batcherLinear(a, step);
-                break;
-            case 1 : batcher(a, step);
-                break;
-        }
+        batcherLinear(a, step);
     }
 }
 
@@ -311,13 +238,10 @@ void shellSortTbb(concurrent_vector<int> *a, int size) {
     }
 }
 
-
-
 int main(int argc, char *argv[]) {
     int elementsNumber = 1000000;
     int a = 0;
     int b = 10000000;
-    vector<int> *arr;
     vector<int> *arr_linear;
     concurrent_vector<int> *arr_tbb;
 
@@ -336,31 +260,23 @@ int main(int argc, char *argv[]) {
         b = atoi(wcount);
     }
 
-    arr = generateRandomArray(elementsNumber, a, b);
-    arr_linear = new vector<int>(elementsNumber);
+    arr_linear = generateRandomArray(elementsNumber, a, b);
     arr_tbb = new concurrent_vector<int>(elementsNumber);
 
     for (int i = 0; i < elementsNumber; ++i) {
-        arr_linear->at(i) = arr->at(i);
-        arr_tbb->at(i) = arr->at(i);
+        arr_tbb->at(i) =  arr_linear->at(i);
     }
 
-
-    shellSort(arr_linear, elementsNumber, 0);
-
-    shellSort(arr, elementsNumber, 1);
-
+    shellSortLinear(arr_linear, elementsNumber);
 
     tbb::task_scheduler_init init;
     shellSortTbb(arr_tbb, elementsNumber);
-
 
     if (check(arr_tbb, elementsNumber)) {
         printf("\nOK: array is lineary sorted");
     } else {
         printf("\n ERROR: array is not sorted");
     }
-    arr->clear();
     arr_linear->clear();
     arr_tbb->clear();
     return 0;
