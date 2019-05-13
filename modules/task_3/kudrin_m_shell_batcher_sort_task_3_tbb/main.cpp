@@ -317,7 +317,6 @@ int main(int argc, char *argv[]) {
     int elementsNumber = 1000000;
     int a = 0;
     int b = 10000000;
-    double start_omp, end_omp, start_linear, end_linear, start_tbb, end_tbb;
     vector<int> *arr;
     vector<int> *arr_linear;
     concurrent_vector<int> *arr_tbb;
@@ -347,26 +346,17 @@ int main(int argc, char *argv[]) {
     }
 
 
-    start_linear = omp_get_wtime();
     shellSort(arr_linear, elementsNumber, 0);
-    end_linear = omp_get_wtime();
 
-    start_omp = omp_get_wtime();
     shellSort(arr, elementsNumber, 1);
-    end_omp = omp_get_wtime();
 
 
     tbb::task_scheduler_init init;
-    start_tbb = omp_get_wtime();
     shellSortTbb(arr_tbb, elementsNumber);
-    end_tbb = omp_get_wtime();
 
-    fflush(stdout);
 
     if (check(arr_tbb, elementsNumber)) {
-        printf("\nOK: array is lineary sorted in %f omp %f tbb %f omp/tbb %f",
-                end_linear - start_linear, end_omp - start_omp, end_tbb
-                - start_tbb, (end_omp - start_omp)/ (end_tbb - start_tbb));
+        printf("\nOK: array is lineary sorted");
     } else {
         printf("\n ERROR: array is not sorted");
     }
