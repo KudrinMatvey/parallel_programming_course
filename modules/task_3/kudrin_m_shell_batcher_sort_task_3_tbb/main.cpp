@@ -499,6 +499,35 @@ void mergeTwo(concurrent_vector<int> *a) {
 	//std::copy(tmp.begin(), tmp.end(), std::back_inserter(a)); 
 }
 
+void mergeTwoTbb(concurrent_vector<int> *a) {
+	concurrent_vector<int> tmp(a->size());
+	size_t e = 0, o = 1, i = 0;
+	while (e < a->size() && o < a->size()) {
+		if (a->at(e) < a->at(o)) {
+			tmp.at(i++) = (a->at(e));
+			e = e + 2;
+		}
+		else {
+			tmp.at(i++) = (a->at(o));
+			o = o + 2;
+		}
+	}
+	while (e < a->size()) {
+		tmp.at(i++) = (a->at(e));
+		e = e + 2;
+	}
+	while (o < a->size()) {
+		tmp.at(i++) = (a->at(o));
+		o = o + 2;
+
+	}
+	tbb::parallel_for(size_t(0), a->size(), [&](size_t k) {
+		a->at(k) = tmp.at(k);
+	});
+	
+}
+
+
 
 void shellSortLinear(concurrent_vector<int> *a) {
 	int step = 0;
@@ -523,12 +552,12 @@ void shellSortTbb(concurrent_vector<int> *a) {
 		step = calculateStep(iter);
 		batcherTbb(a, step);
 	}
-	mergeTwo(a);
+	mergeTwoTbb(a);
 
 }
 
 int main(int argc, char *argv[]) {
-	int elementsNumber = static_cast<int>(ceil(pow(2, 12)));
+	int elementsNumber = static_cast<int>(ceil(pow(2, 14)));
 	int a = 0;
 	int b = 10000000;
 	concurrent_vector<int> arr_linear;
