@@ -211,9 +211,11 @@
 #include <utility>
 #include <string>
 #include <iostream>
+#include <omp.h>
 #include <vector>
 #include <algorithm>
-#include "tbb/concurrent_vector.h"
+#include "tbb/concurrent_vector.h" 
+#include<iterator> // for back_inserter 
 
 using std::vector;
 using tbb::blocked_range;
@@ -244,73 +246,109 @@ public:
 	}
 };
 
-void Foo(concurrent_vector<int> *a, size_t l, int p) {
-	for (int z = a->size(); z >= 0; z--) {
-        int k = static_cast<int>(ceil(pow(2, z)));
-        for (size_t j = k % p; j + k < a->size(); j += (k + k))
-            for (size_t i = 0; i < a->size() - j - k; i++)
-                if ((j + i) / (p + p) == (j + i + k) / (p + p))
-                if(a->begin() + l + j + i - 1> a->begin() + l + j + i + k - 1){
-                   std::iter_swap(a->begin() + l + j + i - 1,
-						a->begin() + l + j + i + k - 1);
-                }
-    }
+
+void SerialOddEvenMerge1(concurrent_vector<int> *a) {
+	int k;
+	int z;
+	for (size_t p = 1; p < a->size(); p += p) {
+		for (z = static_cast<int>(ceil(log2(p))); z > 0; z--)
+		{
+			k = static_cast<int>(ceil(pow(2, z)));
+			for (size_t j = k % p; j + k < a->size(); j += (k + k))
+				for (size_t i = 0; i < a->size() - j - k; i++)
+					if ((j + i) / (p + p) == (j + i + k) / (p + p))
+						if (a->at(j + i)> a->at(j + i + k)) {
+							std::cout << a->at(j + i) << " " << a->at(j + i + k) << std::endl;
+							std::iter_swap(a->begin()  + j + i,
+								a->begin() + j + i + k );
+							std::cout << a->at(j + i) << " " << a->at(j + i + k) << std::endl;
+
+						}
+			}
+		}
+	}
+
+
+void Foo(concurrent_vector<int> *a, size_t z,  int p) {
+	int k = static_cast<int>(ceil(pow(2, z)));
+	for (size_t j = k % p; j + k < a->size(); j += (k + k))
+		for (size_t i = 0; i < a->size() - j - k; i++)
+			if ((j + i) / (p + p) == (j + i + k) / (p + p))
+				if (a->at(j + i) > a->at(j + i + k)) {
+					//std::cout << a->at(j + i) << " " << a->at(j + i + k) << std::endl;
+					std::iter_swap(a->begin() + j + i,
+						a->begin() + j + i + k);
+					//std::cout << a->at(j + i) << " " << a->at(j + i + k) << std::endl;
+
+				}
 }
 
 void SerialOddEvenMerge(concurrent_vector<int> *a) {
-	int l = 1;
-	for (size_t p = l; p < a->size(); p += p) {
-		for (size_t i = 1; i < a->size(); i++)
-			Foo(a, i + 1, p);
+	size_t r = static_cast<int>(ceil(log2(a->size())));
+	size_t p = 1;
+	for (size_t p = 1; p < a->size(); p += p) {
+		for (size_t i = 0; i < r; i ++) {
+			Foo(a, r - i, p);
+		}
 	}
 }
 
-class BatcherSorter {
-	concurrent_vector<int> *a;
-	int step;
+void ParallelOddEvenMerge(concurrent_vector<int> *a) {
+	size_t r = static_cast<int>(ceil(log2(a->size())));
+	size_t p = 1;
+	for (size_t p = 1; p < a->size(); p += p) {
+		tbb::parallel_for(size_t(0), r, [&](size_t i) {
+			Foo(a, r - i, p);
+		});
+	}
+}
 
-public:
-	BatcherSorter(concurrent_vector<int> *a, const int step) : a(a),
-		step(step) {}
-	void operator()(const blocked_range<int>& range) const {
-		int begin = range.begin(), end = range.end();
-		vector<int> *tmp = new vector<int>(a->size() / step);
-		for (int start = begin; start != end; start++) {
-			for (unsigned int i = start, j = 0; i < a->size(); i += step, j++) {
-				tmp->push_back(a->at(i));
-			}
-			const int length = tmp->size();
-			int t = static_cast<int>(ceil(log2(length)));
-			int p = static_cast<int>(pow(2, t - 1));
-			while (p > 0) {
-				int q = static_cast<int>(pow(2, t - 1));
-				int r = 0;
-				int d = p;
-				int i;
-				while (d > 0) {
-					for (i = 0; i < length - d; ++i) {
-						if ((i & p) == r) {
-							if (tmp->at(i) > tmp->at(i + d)) {
-								std::iter_swap(tmp->begin() + i,
-									tmp->begin() + i + d);
+	class BatcherSorter {
+		concurrent_vector<int> *a;
+		int step;
+
+	public:
+		BatcherSorter(concurrent_vector<int> *a, const int step) : a(a),
+			step(step) {}
+		void operator()(const blocked_range<int>& range) const {
+			int begin = range.begin(), end = range.end();
+			vector<int> *tmp = new vector<int>(a->size() / step);
+			for (int start = begin; start != end; start++) {
+				for (unsigned int i = start, j = 0; i < a->size(); i += step, j++) {
+					tmp->push_back(a->at(i));
+				}
+				const int length = tmp->size();
+				int t = static_cast<int>(ceil(log2(length)));
+				int p = static_cast<int>(pow(2, t - 1));
+				while (p > 0) {
+					int q = static_cast<int>(pow(2, t - 1));
+					int r = 0;
+					int d = p;
+					int i;
+					while (d > 0) {
+						for (i = 0; i < length - d; ++i) {
+							if ((i & p) == r) {
+								if (tmp->at(i) > tmp->at(i + d)) {
+									std::iter_swap(tmp->begin() + i,
+										tmp->begin() + i + d);
+								}
 							}
 						}
+						d = q - p;
+						q /= 2;
+						r = p;
 					}
-					d = q - p;
-					q /= 2;
-					r = p;
+					p /= 2;
 				}
-				p /= 2;
-			}
 
-			unsigned int i = start, j = 0;
-			for (; i < a->size() - start; i += step, j++) {
-				a->at(i) = tmp->at(j);
+				unsigned int i = start, j = 0;
+				for (; i < a->size() - start; i += step, j++) {
+					a->at(i) = tmp->at(j);
+				}
+				tmp->clear();
 			}
-			tmp->clear();
+			delete tmp;
 		}
-		delete tmp;
-	}
 };
 
 //void oddEvenMergeSortLinear(std::vector<int> *arr) {
@@ -368,14 +406,14 @@ bool cmdOptionExists(char** begin, char** end, const std::string& option) {
 	return std::find(begin, end, option) != end;
 }
 
-vector<int>* generateRandomArray(const int en, int min, int max) {
+concurrent_vector<int> generateRandomArray(const int en, int min, int max) {
 	if (min >= max) {
 		max = min + max;
 	}
-	vector<int> *arr = new vector<int>(en);
+	concurrent_vector<int> arr(en);
 	srand(static_cast<unsigned int>(time(NULL)));
 	for (int j = 0; j < en; j++)
-		arr->at(j) = min + (std::rand() % (max - min));
+		arr.at(j) = min + (std::rand() % (max - min));
 	return arr;
 }
 
@@ -391,12 +429,12 @@ bool check(concurrent_vector<int> *arr, int elementsNumber) {
 	return flag;
 }
 
-int calculateStep(int iter) {
+size_t calculateStep(int iter) {
     return static_cast<int>(ceil(pow(2, iter)));
 }
 
 
-void batcherLinear(vector<int> *a, const int step) {
+void batcherLinear(concurrent_vector<int> *a, const int step) {
 	concurrent_vector<int> tmp;
 	int start;
 	for (start = 0; start < step; start++) {
@@ -409,70 +447,92 @@ void batcherLinear(vector<int> *a, const int step) {
 			a->at(i) = tmp.at(j);
 		}
 		tmp.clear();
-	}  // end of parallel section
+	} 
 }
 
-void ParallelOddEvenMerge( concurrent_vector<int> *a) {
-    int l = 1;
-    for (size_t p = l; p < a->size(); p += p) {
-        tbb::parallel_for(size_t(0),a->size(), [&](size_t i) {
-            Foo(a, i + 1, p);
-        });
-    }
-}
+
 
 
 void batcherTbb(concurrent_vector<int> *a, const int step) {
-	concurrent_vector<int> *tmp = new concurrent_vector<int>;
+	concurrent_vector<int> tmp;
 	int start;
 	for (start = 0; start < step; start++) {
 		for (unsigned int i = start, j = 0; i < a->size(); i += step, j++) {
-			tmp->push_back(a->at(i));
+			tmp.push_back(a->at(i));
 		}
-		
-		ParallelOddEvenMerge(a);
-		
+		ParallelOddEvenMerge(&tmp);
 		unsigned int i = start, j = 0;
 		for (; i < a->size() - start; i += step, j++) {
-			a->at(i) = tmp->at(j);
+			a->at(i) = tmp.at(j);
 		}
-		tmp->clear();
-	}  // end of parallel section
-	delete tmp;
+		tmp.clear();
+	}  
 }
 
 
-void shellSortLinear(vector<int> *a, int size) {
+void mergeTwo(concurrent_vector<int> *a) {
+	concurrent_vector<int> tmp(a->size());
+	size_t e = 0, o = 1, i = 0;
+	while (e < a->size() && o < a->size()) {
+		if (a->at(e) < a->at(o)) {
+			tmp.at(i++) = (a->at(e));
+			e = e + 2;
+		}
+		else {
+			tmp.at(i++) = (a->at(o));
+			o = o + 2;
+		}
+	}
+	while (e < a->size()) {
+		tmp.at(i++) = (a->at(e));
+		e = e + 2;
+	}
+	while (o < a->size()) {
+		tmp.at(i++) = (a->at(o));
+		o = o + 2;
+
+	}
+	for (size_t k = 0; k < a->size(); k++)
+	{
+		a->at(k) = tmp.at(k);
+	}
+	//std::copy(tmp.begin(), tmp.end(), std::back_inserter(a)); 
+}
+
+
+void shellSortLinear(concurrent_vector<int> *a) {
 	int step = 0;
 	int iter = 0;
-	while (calculateStep(iter++) < size / 3) {
+	while (calculateStep(iter++) < a->size() / 3) {
 		step = calculateStep(iter);
 	}
 	while (--iter >= 0) {
 		step = calculateStep(iter);
 		batcherLinear(a, step);
 	}
+	mergeTwo(a);
 }
 
-void shellSortTbb(concurrent_vector<int> *a, int size) {
+void shellSortTbb(concurrent_vector<int> *a) {
 	int step = 0;
 	int iter = 0;
-	while (calculateStep(iter++) < size / 3) {
+	while (calculateStep(iter++) < a->size() / 3) {
 		step = calculateStep(iter);
 	}
 	while (--iter >= 0) {
 		step = calculateStep(iter);
 		batcherTbb(a, step);
 	}
+	mergeTwo(a);
+
 }
 
 int main(int argc, char *argv[]) {
-	int elementsNumber = 4;
+	int elementsNumber = static_cast<int>(ceil(pow(2, 12)));
 	int a = 0;
 	int b = 10000000;
-	vector<int> *arr_linear;
-	concurrent_vector<int> *arr_tbb;
-
+	concurrent_vector<int> arr_linear;
+	
 	if (cmdOptionExists(argv, argv + argc, "-n")) {
 		char *wcount = getCmdOption(argv, argv + argc, "-n");
 		elementsNumber = atoi(wcount);
@@ -489,24 +549,43 @@ int main(int argc, char *argv[]) {
 	}
 
 	arr_linear = generateRandomArray(elementsNumber, a, b);
-	arr_tbb = new concurrent_vector<int>(elementsNumber);
-
-	for (int i = 0; i < elementsNumber; ++i) {
-		arr_tbb->at(i) = arr_linear->at(i);
-	}
+	concurrent_vector<int> arr_tbb(arr_linear);
 
 //	shellSortLinear(arr_linear, elementsNumber);
-	ParallelOddEvenMerge(arr_tbb);
+	double start_linear = omp_get_wtime();
+//	SerialOddEvenMerge(arr_linear);
+
+	/*size_t r = static_cast<int>(ceil(log2(arr_linear->size())));
+	size_t p = 1;
+	for (size_t i = 0; i < r; i++) {
+		
+		Foo(arr_linear, r - i, p);
+	}*/
+	shellSortLinear(&arr_linear);
+	double end_linear = omp_get_wtime();
+
 	tbb::task_scheduler_init init;
+	double start_parallel = omp_get_wtime();
+	shellSortTbb(&arr_tbb);
+	//ParallelOddEvenMerge(arr_tbb);
+//	size_t r = static_cast<int>(ceil(log2(a->size())));
+	//size_t p = 1;
+	//for (size_t p = 1; p < a->size(); p += p) {
+	//tbb::parallel_for(size_t(0), r, [&](size_t i) {
+		//Foo(arr_tbb, r - i, p);
+		//            Foo(a, i + 1, p);
+	//});
+	//}
+	double end_parallel = omp_get_wtime();
 	//shellSortTbb(arr_tbb, elementsNumber);
 
-	if (check(arr_tbb, elementsNumber)) {
+	if (check(&arr_tbb, elementsNumber)) {
 		printf("\nOK: array is lineary sorted");
 	}
 	else {
 		printf("\n ERROR: array is not sorted");
 	}
-	arr_linear->clear();
-	arr_tbb->clear();
+	printf("\nOK: array is lineary sorted in %f tbb %f", end_linear - start_linear, end_parallel - start_parallel);
+	
 	return 0;
 }
